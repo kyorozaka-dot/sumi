@@ -50,7 +50,9 @@ private data class AISuggestionResponse(
  * このスケルトンでは Claude API パスのみ実装。
  * 端末内モデル統合は本番で AICore SDK を追加して差し替える。
  */
-class AISuggestionClient(@Suppress("unused") private val context: Context) {
+class AISuggestionClient(private val context: Context) {
+
+    private val apiKeyStorage by lazy { ApiKeyStorage(context) }
 
     private val cache = SuggestionCache(maxEntries = 32, ttlMillis = 30_000)
 
@@ -190,11 +192,7 @@ class AISuggestionClient(@Suppress("unused") private val context: Context) {
         return null
     }
 
-    private fun readApiKeyOrNull(): String? {
-        // TODO: 本番は EncryptedSharedPreferences / Android Keystore で保存
-        // ここではダミー実装
-        return null
-    }
+    private fun readApiKeyOrNull(): String? = apiKeyStorage.getApiKey()
 
     // ------------------------------------------------------------------------
     // ヘルパー

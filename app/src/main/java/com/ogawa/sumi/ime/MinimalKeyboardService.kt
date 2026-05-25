@@ -59,7 +59,7 @@ class MinimalKeyboardService : InputMethodService(),
     // --- 依存コンポーネント ---
     private val flickComposer = KanaComposer()
     private val romajiComposer = RomajiComposer()
-    private val conversion = StubConversionEngine()
+    private val conversion by lazy { SimpleDictConversionEngine(applicationContext) }
     private val state = KeyboardStateHolder()
     private val aiClient by lazy { AISuggestionClient(applicationContext) }
 
@@ -411,28 +411,6 @@ class KanaComposer : InputComposer {
 
         /** UI（長押しポップアップ）からフリック候補を取得するための公開API */
         fun flickOptionsFor(base: String): List<String>? = FLICK_TABLE[base]
-    }
-}
-
-// ============================================================================
-// 変換エンジン（スタブ）
-// ============================================================================
-
-/**
- * 本番はmozc / Sudachi / kuromoji + 自前辞書などに差し替える。
- * ここは「とりあえずひらがなとカタカナを返す」だけの最小実装。
- */
-class StubConversionEngine {
-    fun candidatesFor(input: String): List<String> {
-        if (input.isBlank()) return emptyList()
-        val katakana = input.map {
-            // ひらがな → カタカナ（U+3041..U+3096 → U+30A1..U+30F6）
-            if (it.code in 0x3041..0x3096) (it.code + 0x60).toChar() else it
-        }.joinToString("")
-        return listOfNotNull(
-            input,
-            if (katakana != input) katakana else null
-        )
     }
 }
 

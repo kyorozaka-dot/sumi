@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,10 +20,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -40,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
+import com.ogawa.sumi.ai.ApiKeyStorage
 import kotlinx.coroutines.launch
 
 // ============================================================================
@@ -50,6 +56,7 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = KeyboardPreferences(applicationContext)
+        val apiKeyStorage = ApiKeyStorage(applicationContext)
 
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = Accent)) {
@@ -58,6 +65,7 @@ class SettingsActivity : ComponentActivity() {
                 )
                 SettingsScreen(
                     snapshot = snapshot,
+                    apiKeyStorage = apiKeyStorage,
                     onBooleanChange = { key, value ->
                         lifecycleScope.launch { prefs.setBoolean(key, value) }
                     },
@@ -95,11 +103,32 @@ private val BorderSubtle = Color(0x14000000)
 @Composable
 fun SettingsScreen(
     snapshot: KeyboardPreferences.Snapshot,
+    apiKeyStorage: ApiKeyStorage,
     onBooleanChange: (androidx.datastore.preferences.core.Preferences.Key<Boolean>, Boolean) -> Unit,
     onStringChange: (androidx.datastore.preferences.core.Preferences.Key<String>, String) -> Unit,
     onIntChange: (androidx.datastore.preferences.core.Preferences.Key<Int>, Int) -> Unit,
     onBack: () -> Unit
 ) {
+    var apiKeyState by remember { mutableStateOf(apiKeyStorage.getApiKey()) }
+    var showApiKeyDialog by remember { mutableStateOf(false) }
+
+    if (showApiKeyDialog) {
+        ApiKeyDialog(
+            currentKey = apiKeyState,
+            onSave = { key ->
+                apiKeyStorage.saveApiKey(key)
+                apiKeyState = apiKeyStorage.getApiKey()
+                showApiKeyDialog = false
+            },
+            onDelete = {
+                apiKeyStorage.clearApiKey()
+                apiKeyState = null
+                showApiKeyDialog = false
+            },
+            onDismiss = { showApiKeyDialog = false }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -174,6 +203,16 @@ fun SettingsScreen(
                     value = snapshot.keyboardHeight.toFloat(),
                     valueRange = 40f..100f,
                     onChange = { onIntChange(KeyboardPreferences.Keys.KEYBOARD_HEIGHT, it.toInt()) },
+                    isLast = true
+                )
+            }
+
+            // ---------- AI設定 ----------
+            SectionHeader("AI設定")
+            Section {
+                ApiKeyRow(
+                    currentKey = apiKeyState,
+                    onTap = { showApiKeyDialog = true },
                     isLast = true
                 )
             }
@@ -412,6 +451,117 @@ private fun ActionRow(
 @Composable
 private fun RowDivider() {
     Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(BorderSubtle))
+}
+
+@Composable
+private fun ApiKeyRow(
+    currentKey: String?,
+    onTap: () -> Unit,
+    isLast: Boolean = false
+) {
+    val displayValue = when {
+        currentKey == null -> "未設定"
+        currentKey.length >= 5 -> "設定済み (${currentKey.take(5)}****)"
+        else -> "設定済み (****)"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onTap)
+            .padding(horizontal = 18.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Anthropic APIキー",
+            color = TextPrimary,
+            fontSize = 14.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = displayValue, color = TextSecondary, fontSize = 13.sp)
+            Spacer(modifier = Modifier.size(4.dp))
+            Text(text = "›", color = TextSecondary, fontSize = 16.sp)
+        }
+    }
+    if (!isLast) RowDivider()
+}
+
+@Composable
+private fun ApiKeyDialog(
+    currentKey: String?,
+    onSave: (String) -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var inputText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = BgRow,
+        shape = RoundedCornerShape(12.dp),
+        title = {
+            Text(
+                text = "Anthropic APIキー",
+                color = TextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (currentKey != null) {
+                    Text(
+                        text = "現在: ${currentKey.take(5)}****",
+                        color = TextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    placeholder = {
+                        Text("sk-ant-...", color = TextSecondary, fontSize = 13.sp)
+                    },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(0.5.dp, BorderSubtle, RoundedCornerShape(6.dp)),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Accent,
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = Accent
+                    ),
+                    shape = RoundedCornerShape(6.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (currentKey != null) {
+                    TextButton(onClick = onDelete) {
+                        Text("削除", color = TextDestructive, fontSize = 13.sp)
+                    }
+                }
+                TextButton(
+                    onClick = { if (inputText.isNotBlank()) onSave(inputText.trim()) },
+                    enabled = inputText.isNotBlank()
+                ) {
+                    Text(
+                        "保存",
+                        color = if (inputText.isNotBlank()) Accent else TextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("キャンセル", color = TextSecondary, fontSize = 13.sp)
+            }
+        }
+    )
 }
 
 // ============================================================================

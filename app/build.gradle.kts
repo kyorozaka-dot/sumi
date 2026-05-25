@@ -58,4 +58,7 @@ dependencies {
 
     // DataStore (設定永続化)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // EncryptedSharedPreferences (APIキー安全保存)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }
