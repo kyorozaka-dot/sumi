@@ -2,6 +2,7 @@ package com.ogawa.sumi.ime
 
 import android.content.Context
 import android.inputmethodservice.InputMethodService
+import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.View
@@ -228,8 +229,16 @@ class MinimalKeyboardService : InputMethodService(),
                 state.inputMode = state.inputMode.next()
             }
             KeyInput.SwitchKeyboard -> {
-                // システムIMEピッカーを開く
-                switchToNextInputMethod(false)
+                // システムIMEピッカーを開く（API 28+ でのみ利用可能）
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    switchToNextInputMethod(false)
+                } else {
+                    // API 26-27 フォールバック: IMEピッカーダイアログを表示
+                    val imm = getSystemService(INPUT_METHOD_SERVICE)
+                            as? android.view.inputmethod.InputMethodManager
+                    @Suppress("DEPRECATION")
+                    imm?.showInputMethodPicker()
+                }
             }
             KeyInput.Shift -> { /* 上で処理済み、ここには来ない */ }
         }

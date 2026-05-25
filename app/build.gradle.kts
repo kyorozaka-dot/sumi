@@ -61,4 +61,7 @@ dependencies {
 
     // EncryptedSharedPreferences (APIキー安全保存)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Unit Tests
+    testImplementation("junit:junit:4.13.2")
 }

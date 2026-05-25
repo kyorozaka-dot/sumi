@@ -1,13 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  バックアップルール (API < 31 向け)
+  EncryptedSharedPreferences に保存した APIキーは端末固有のキーで暗号化されているため、
+  他の端末にリストアしても復号できない。バックアップから明示的に除外する。
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="sumi_secure_prefs" />
+    <exclude domain="sharedpref" path="sumi_secure_prefs.xml" />
 </full-backup-content>

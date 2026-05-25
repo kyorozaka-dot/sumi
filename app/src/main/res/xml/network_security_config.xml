@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ネットワークセキュリティ設定
+  HTTP（平文）通信を完全に禁止し HTTPS のみを許可する。
+  Claude API は https://api.anthropic.com に対してのみ通信する。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
