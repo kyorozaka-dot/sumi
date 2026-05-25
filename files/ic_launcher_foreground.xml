@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sumi icon - foreground layer (brushstroke) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M 32,38 Q 50,40 75,54 Q 83,58 87,64 L 85,66 Q 77,60 61,56 Q 44,52 32,48 Q 26,46 28,40 Q 28,36 32,38 Z" />
+</vector>
