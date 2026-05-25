@@ -53,13 +53,13 @@ class MinimalKeyboardService : InputMethodService(),
     SavedStateRegistryOwner {
 
     // --- Lifecycle / ViewModel / SavedState owners (ComposeView用) ---
-    private val lifecycleRegistry = LifecycleRegistry(this)
-    private val savedStateRegistryController = SavedStateRegistryController.create(this)
-    private val internalViewModelStore = ViewModelStore()
+    private val lifecycleRegistry by lazy { LifecycleRegistry(this) }
+    private val savedStateController = SavedStateRegistryController.create(this)
+    private val store = ViewModelStore()
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
-    override val viewModelStore: ViewModelStore get() = internalViewModelStore
-    override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+    override val viewModelStore: ViewModelStore get() = store
+    override val savedStateRegistry: SavedStateRegistry get() = savedStateController.savedStateRegistry
 
     // --- 依存コンポーネント ---
     private val flickComposer = KanaComposer()
@@ -81,8 +81,8 @@ class MinimalKeyboardService : InputMethodService(),
 
     override fun onCreate() {
         super.onCreate()
-        savedStateRegistryController.performRestore(null)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        savedStateController.performRestore(null)
+        lifecycleRegistry.currentState = Lifecycle.State.CREATED
 
         // 設定 DataStore を初期化し、変更をリアルタイムで state に反映
         kbPrefs = KeyboardPreferences(applicationContext)
@@ -98,13 +98,7 @@ class MinimalKeyboardService : InputMethodService(),
     }
 
     override fun onCreateInputView(): View {
-        if (lifecycleRegistry.currentState == Lifecycle.State.CREATED) {
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-        }
-        return ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@MinimalKeyboardService)
-            setViewTreeViewModelStoreOwner(this@MinimalKeyboardService)
-            setViewTreeSavedStateRegistryOwner(this@MinimalKeyboardService)
+        val composeView = ComposeView(this).apply {
             setContent {
                 MinimalKeyboardTheme(themeMode = state.theme) {
                     KeyboardScreen(
@@ -116,6 +110,21 @@ class MinimalKeyboardService : InputMethodService(),
                 }
             }
         }
+        // 🔑 ViewTree owners を ComposeView に設定（Android 16 クラッシュ修正）
+        composeView.setViewTreeLifecycleOwner(this@MinimalKeyboardService)
+        composeView.setViewTreeViewModelStoreOwner(this@MinimalKeyboardService)
+        composeView.setViewTreeSavedStateRegistryOwner(this@MinimalKeyboardService)
+        return composeView
+    }
+
+    override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
+        super.onStartInputView(info, restarting)
+        lifecycleRegistry.currentState = Lifecycle.State.RESUMED
+    }
+
+    override fun onFinishInputView(finishingInput: Boolean) {
+        lifecycleRegistry.currentState = Lifecycle.State.CREATED
+        super.onFinishInputView(finishingInput)
     }
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
@@ -136,9 +145,9 @@ class MinimalKeyboardService : InputMethodService(),
     }
 
     override fun onDestroy() {
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
+        store.clear()
         serviceScope.cancel()
-        internalViewModelStore.clear()
         super.onDestroy()
     }
 
