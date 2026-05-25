@@ -7,6 +7,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.widget.FrameLayout
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -98,7 +99,10 @@ class MinimalKeyboardService : InputMethodService(),
     }
 
     override fun onCreateInputView(): View {
-        val composeView = ComposeView(this).apply {
+        val service = this@MinimalKeyboardService
+
+        // ComposeView を生成してコンテンツを設定
+        val composeView = ComposeView(service).apply {
             setContent {
                 MinimalKeyboardTheme(themeMode = state.theme) {
                     KeyboardScreen(
@@ -110,11 +114,37 @@ class MinimalKeyboardService : InputMethodService(),
                 }
             }
         }
-        // 🔑 ViewTree owners を ComposeView に設定（Android 16 クラッシュ修正）
-        composeView.setViewTreeLifecycleOwner(this@MinimalKeyboardService)
-        composeView.setViewTreeViewModelStoreOwner(this@MinimalKeyboardService)
-        composeView.setViewTreeSavedStateRegistryOwner(this@MinimalKeyboardService)
-        return composeView
+
+        // 念のため ComposeView 自体にも設定（rc4 からの保険を維持）
+        composeView.setViewTreeLifecycleOwner(service)
+        composeView.setViewTreeViewModelStoreOwner(service)
+        composeView.setViewTreeSavedStateRegistryOwner(service)
+
+        // 🔑 FrameLayout ラッパーで onAttachedToWindow をオーバーライド。
+        //    Android の ViewGroup は onAttachedToWindow() (親) → 子の dispatchAttachedToWindow()
+        //    の順に呼ぶため、ここで rootView（IME の parentPanel）に owner を設定すると、
+        //    ComposeView の onAttachedToWindow() が実行される前に owner が確定する。
+        //    Android 16 / One UI 8.0 で報告されたクラッシュを修正:
+        //    "ViewTreeLifecycleOwner not found from android.widget.LinearLayout{...#10204bd android:id/parentPanel}"
+        val wrapper = object : FrameLayout(service) {
+            override fun onAttachedToWindow() {
+                // super より前に rootView（parentPanel）に owner を設定する（重要）
+                rootView.setViewTreeLifecycleOwner(service)
+                rootView.setViewTreeViewModelStoreOwner(service)
+                rootView.setViewTreeSavedStateRegistryOwner(service)
+                super.onAttachedToWindow()
+                // super の後、子 View（ComposeView）の onAttachedToWindow が呼ばれる
+            }
+        }
+        wrapper.addView(
+            composeView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        return wrapper
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
