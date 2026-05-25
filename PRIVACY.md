@@ -357,7 +357,7 @@ AI候補機能を有効化した場合、利用者が自らAnthropic社（米国
 
 本ポリシーに関する質問、要望、及び個人情報保護法第32条に基づく苦情処理は、以下までお問い合わせください。
 
-- **GitHub Issues**: https://github.com/yasunori-ogawa/sumi/issues
+- **GitHub Issues**: https://github.com/kyorozaka-dot/sumi/issues
 - **受付言語**: 日本語、英語
 - **受付時間**: 随時受付（返信は合理的な期間内）
 
@@ -407,7 +407,7 @@ AI候補機能を有効化した場合、利用者が自らAnthropic社（米国
 - `app/src/main/java/com/ogawa/sumi/ai/ApiKeyStorage.kt`（APIキー保管実装）
 - `app/build.gradle.kts`（第三者ライブラリ一覧）
 
-リポジトリ: https://github.com/yasunori-ogawa/sumi
+リポジトリ: https://github.com/kyorozaka-dot/sumi
 
 ---
 

@@ -66,7 +66,7 @@ Sumi はあなたの入力を**一切収集しません**。
 ### 開発者ビルド
 
 ```bash
-git clone https://github.com/yasunori-ogawa/sumi.git
+git clone https://github.com/kyorozaka-dot/sumi.git
 cd sumi
 ./gradlew installDebug  # Android端末をUSB接続後
 ```

@@ -44,7 +44,7 @@ Sumi は、年齢、障害の有無、利用環境にかかわらず、すべて
 
 アクセシビリティに関するご要望、改善提案、不具合の報告は GitHub Issues にて受け付けます。
 
-https://github.com/yasunori-ogawa/sumi/issues
+https://github.com/kyorozaka-dot/sumi/issues
 
 「accessibility」ラベルを付けてご投稿いただくか、Issueタイトルに【アクセシビリティ】と明記してください。
 

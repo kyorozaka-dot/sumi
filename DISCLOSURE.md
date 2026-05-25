@@ -25,7 +25,7 @@
 
 **GitHub Issues** にて、件名を「[開示請求] ○○の請求」として投稿してください。
 
-https://github.com/yasunori-ogawa/sumi/issues
+https://github.com/kyorozaka-dot/sumi/issues
 
 非公開情報を含む場合は、Issue 本文に「詳細は非公開チャネルでお伝えします」と記載し、別途連絡を取らせていただきます。
 
@@ -133,5 +133,5 @@ Sumi 開発者は、開示請求に関する記録（請求日、請求内容、
 
 ## 連絡先
 
-- GitHub Issues: https://github.com/yasunori-ogawa/sumi/issues
+- GitHub Issues: https://github.com/kyorozaka-dot/sumi/issues
 
