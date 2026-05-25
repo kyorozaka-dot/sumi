@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Sumi</string>
+    <string name="keyboard_name">Sumi</string>
+    <string name="settings_title">Sumi 設定</string>
+    <string name="subtype_japanese">日本語</string>
+    <string name="subtype_english">English</string>
+</resources>

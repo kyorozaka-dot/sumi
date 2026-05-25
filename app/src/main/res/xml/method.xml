@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.ogawa.sumi.settings.SettingsActivity"
+    android:supportsSwitchingToNextInputMethod="true"
+    android:isDefault="false">
+    <subtype
+        android:label="@string/subtype_japanese"
+        android:imeSubtypeLocale="ja_JP"
+        android:imeSubtypeMode="keyboard"
+        android:imeSubtypeExtraValue="KeyboardLayoutSet=flick12"
+        android:isAsciiCapable="true" />
+    <subtype
+        android:label="@string/subtype_english"
+        android:imeSubtypeLocale="en_US"
+        android:imeSubtypeMode="keyboard"
+        android:imeSubtypeExtraValue="KeyboardLayoutSet=qwerty"
+        android:isAsciiCapable="true" />
+</input-method>
