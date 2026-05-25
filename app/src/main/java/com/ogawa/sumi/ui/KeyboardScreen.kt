@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +20,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,30 +53,91 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 
 // ============================================================================
-// テーマ（最小限）
+// カラーテーマ定義
 // ============================================================================
 
-private val BgKeyboard = Color(0xFFEBEAE5)
-private val BgKey = Color(0xFFFFFFFF)
-private val BgKeyCtrl = Color(0xFFD6D4CE)
-private val TextPrimary = Color(0xFF1F1F1D)
-private val TextSecondary = Color(0xFF9A9A96)
-private val Accent = Color(0xFF7F77DD)
-private val AccentDark = Color(0xFF534AB7)
-private val AccentSoft = Color(0x1F7F77DD)
-private val BorderSubtle = Color(0x14000000)
+/** キーボード全域で使う色セット。ライト / ダーク の2バリアントを用意する。 */
+private data class KeyboardColors(
+    val bgKeyboard: Color,
+    val bgKey: Color,
+    val bgKeyCtrl: Color,
+    val textPrimary: Color,
+    val textSecondary: Color,
+    val accent: Color,
+    val accentDark: Color,
+    val accentSoft: Color,
+    val borderSubtle: Color
+)
 
+private val LightKeyboardColors = KeyboardColors(
+    bgKeyboard  = Color(0xFFEBEAE5),
+    bgKey       = Color(0xFFFFFFFF),
+    bgKeyCtrl   = Color(0xFFD6D4CE),
+    textPrimary = Color(0xFF1F1F1D),
+    textSecondary = Color(0xFF9A9A96),
+    accent      = Color(0xFF7F77DD),
+    accentDark  = Color(0xFF534AB7),
+    accentSoft  = Color(0x1F7F77DD),
+    borderSubtle = Color(0x14000000)
+)
+
+private val DarkKeyboardColors = KeyboardColors(
+    bgKeyboard  = Color(0xFF1A1A1A),
+    bgKey       = Color(0xFF2C2C2C),
+    bgKeyCtrl   = Color(0xFF1A1A1A),
+    textPrimary = Color(0xFFFFFFFF),
+    textSecondary = Color(0xFFAAAAAA),
+    accent      = Color(0xFF7F77DD),
+    accentDark  = Color(0xFF9B95E8), // ダーク時はやや明るく
+    accentSoft  = Color(0x1F7F77DD),
+    borderSubtle = Color(0x22FFFFFF)
+)
+
+/**
+ * コンポジションローカル。
+ * MinimalKeyboardTheme が CompositionLocalProvider で設定し、
+ * 以降のすべての子 composable は `val c = LocalKeyboardColors.current` で参照する。
+ */
+private val LocalKeyboardColors = compositionLocalOf { LightKeyboardColors }
+
+// ============================================================================
+// テーマエントリポイント
+// ============================================================================
+
+/**
+ * テーマコンテナ。設定の themeMode に応じて色を切り替える。
+ *
+ * @param themeMode "light" | "dark" | "auto"（デフォルト auto = システム設定に追従）
+ */
 @Composable
-fun MinimalKeyboardTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = lightColorScheme(
-            background = BgKeyboard,
-            surface = BgKey,
-            onSurface = TextPrimary,
-            primary = Accent
-        ),
-        content = content
-    )
+fun MinimalKeyboardTheme(themeMode: String = "auto", content: @Composable () -> Unit) {
+    val isDark = when (themeMode) {
+        "dark"  -> true
+        "light" -> false
+        else    -> isSystemInDarkTheme()   // "auto": システムのダークモード設定に追従
+    }
+    val colors = if (isDark) DarkKeyboardColors else LightKeyboardColors
+
+    CompositionLocalProvider(LocalKeyboardColors provides colors) {
+        MaterialTheme(
+            colorScheme = if (isDark) {
+                darkColorScheme(
+                    background = colors.bgKeyboard,
+                    surface    = colors.bgKey,
+                    onSurface  = colors.textPrimary,
+                    primary    = colors.accent
+                )
+            } else {
+                lightColorScheme(
+                    background = colors.bgKeyboard,
+                    surface    = colors.bgKey,
+                    onSurface  = colors.textPrimary,
+                    primary    = colors.accent
+                )
+            },
+            content = content
+        )
+    }
 }
 
 // ============================================================================
@@ -86,32 +151,40 @@ fun KeyboardScreen(
     onCandidateSelect: (String) -> Unit,
     onAISuggestionSelect: (AISuggestion) -> Unit
 ) {
+    val c = LocalKeyboardColors.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(BgKeyboard)
+            .background(c.bgKeyboard)
     ) {
-        AISuggestionBar(
-            suggestions = state.aiSuggestions,
-            loading = state.aiLoading,
-            onSelect = onAISuggestionSelect
-        )
+        // AI候補バー: aiEnabled が false なら非表示、スキップのみでスペースも消す
+        if (state.aiEnabled) {
+            AISuggestionBar(
+                suggestions = state.aiSuggestions,
+                loading     = state.aiLoading,
+                onSelect    = onAISuggestionSelect
+            )
+        }
         CandidateBar(
             candidates = state.candidates,
-            onSelect = onCandidateSelect
+            onSelect   = onCandidateSelect
         )
         // フリック ⇄ QWERTY をクロスフェードで切替（150ms ease）
         Crossfade(
-            targetState = state.inputMode,
+            targetState  = state.inputMode,
             animationSpec = tween(durationMillis = 150),
-            label = "keyboard-layout"
+            label        = "keyboard-layout"
         ) { mode ->
             when (mode) {
                 InputMode.QWERTY_ROMAJI -> QwertyGrid(
                     shiftState = state.shiftState,
                     onKeyInput = onKeyInput
                 )
-                else -> KeyGrid(onKeyInput = onKeyInput)
+                else -> KeyGrid(
+                    flickSensitivity = state.flickSensitivity,
+                    longPressMs      = state.longPressMs.toLong(),
+                    onKeyInput       = onKeyInput
+                )
             }
         }
     }
@@ -128,12 +201,13 @@ private fun AISuggestionBar(
     onSelect: (AISuggestion) -> Unit
 ) {
     if (suggestions.isEmpty() && !loading) return
+    val c = LocalKeyboardColors.current
 
     val scroll = rememberScrollState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(BgKeyboard)
+            .background(c.bgKeyboard)
             .horizontalScroll(scroll)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -141,11 +215,7 @@ private fun AISuggestionBar(
     ) {
         AILabel()
         if (loading) {
-            Text(
-                text = "候補を作成中...",
-                color = TextSecondary,
-                fontSize = 12.sp
-            )
+            Text(text = "候補を作成中...", color = c.textSecondary, fontSize = 12.sp)
         } else {
             suggestions.forEach { suggestion ->
                 AIPill(suggestion = suggestion, onClick = { onSelect(suggestion) })
@@ -156,48 +226,35 @@ private fun AISuggestionBar(
 
 @Composable
 private fun AILabel() {
+    val c = LocalKeyboardColors.current
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(AccentSoft)
+            .background(c.accentSoft)
             .padding(horizontal = 9.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = "✦",
-            color = AccentDark,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium
-        )
-        Text(
-            text = "AI",
-            color = AccentDark,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium
-        )
+        Text(text = "✦", color = c.accentDark, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        Text(text = "AI",  color = c.accentDark, fontSize = 11.sp, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 private fun AIPill(suggestion: AISuggestion, onClick: () -> Unit) {
-    val displayText = if (suggestion.text.length > 14) {
-        suggestion.text.take(13) + "…"
-    } else suggestion.text
+    val c = LocalKeyboardColors.current
+    val displayText = if (suggestion.text.length > 14) suggestion.text.take(13) + "…"
+                      else suggestion.text
 
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(BgKey)
+            .background(c.bgKey)
             .border(0.5.dp, Color(0x4D7F77DD), RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Text(
-            text = displayText,
-            color = TextPrimary,
-            fontSize = 12.sp
-        )
+        Text(text = displayText, color = c.textPrimary, fontSize = 12.sp)
     }
 }
 
@@ -210,9 +267,10 @@ private fun CandidateBar(
     candidates: List<String>,
     onSelect: (String) -> Unit
 ) {
+    val c = LocalKeyboardColors.current
     if (candidates.isEmpty()) {
         // 空のときも高さを保持して、キーボードが上下に動かないようにする
-        Spacer(modifier = Modifier.height(36.dp).fillMaxWidth().background(BgKeyboard))
+        Spacer(modifier = Modifier.height(36.dp).fillMaxWidth().background(c.bgKeyboard))
         return
     }
 
@@ -220,7 +278,7 @@ private fun CandidateBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(BgKeyboard)
+            .background(c.bgKeyboard)
             .horizontalScroll(scroll)
             .padding(horizontal = 10.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -234,9 +292,9 @@ private fun CandidateBar(
                     .padding(horizontal = 11.dp, vertical = 6.dp)
             ) {
                 Text(
-                    text = cand,
-                    color = if (index == 0) AccentDark else TextPrimary,
-                    fontSize = 13.sp,
+                    text       = cand,
+                    color      = if (index == 0) c.accentDark else c.textPrimary,
+                    fontSize   = 13.sp,
                     fontWeight = if (index == 0) FontWeight.Medium else FontWeight.Normal
                 )
             }
@@ -268,11 +326,16 @@ private val KEY_LAYOUT: List<List<KeyDef>> = listOf(
 )
 
 @Composable
-private fun KeyGrid(onKeyInput: (KeyInput) -> Unit) {
+private fun KeyGrid(
+    flickSensitivity: Int,
+    longPressMs: Long,
+    onKeyInput: (KeyInput) -> Unit
+) {
+    val c = LocalKeyboardColors.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(BgKeyboard)
+            .background(c.bgKeyboard)
             .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
@@ -283,7 +346,12 @@ private fun KeyGrid(onKeyInput: (KeyInput) -> Unit) {
             ) {
                 row.forEach { def ->
                     Box(modifier = Modifier.weight(1f)) {
-                        Key(def = def, onKeyInput = onKeyInput)
+                        Key(
+                            def              = def,
+                            flickSensitivity = flickSensitivity,
+                            longPressMs      = longPressMs,
+                            onKeyInput       = onKeyInput
+                        )
                     }
                 }
             }
@@ -292,8 +360,14 @@ private fun KeyGrid(onKeyInput: (KeyInput) -> Unit) {
 }
 
 @Composable
-private fun Key(def: KeyDef, onKeyInput: (KeyInput) -> Unit) {
-    val bg = if (def.isControl) BgKeyCtrl else BgKey
+private fun Key(
+    def: KeyDef,
+    flickSensitivity: Int,
+    longPressMs: Long,
+    onKeyInput: (KeyInput) -> Unit
+) {
+    val c = LocalKeyboardColors.current
+    val bg       = if (def.isControl) c.bgKeyCtrl else c.bgKey
     val fontSize = if (def.isControl) 12.sp else 18.sp
 
     val keyModifier = Modifier
@@ -301,24 +375,24 @@ private fun Key(def: KeyDef, onKeyInput: (KeyInput) -> Unit) {
         .height(46.dp)
         .clip(RoundedCornerShape(8.dp))
         .background(bg)
-        .border(0.5.dp, BorderSubtle, RoundedCornerShape(8.dp))
+        .border(0.5.dp, c.borderSubtle, RoundedCornerShape(8.dp))
 
     if (def.isControl) {
         Box(
-            modifier = keyModifier.clickable {
-                def.controlAction?.let(onKeyInput)
-            },
+            modifier = keyModifier.clickable { def.controlAction?.let(onKeyInput) },
             contentAlignment = Alignment.Center
         ) {
-            Text(text = def.label, color = TextPrimary, fontSize = fontSize)
+            Text(text = def.label, color = c.textPrimary, fontSize = fontSize)
         }
     } else {
         // フリック対応キー: タップ＝中央、ドラッグ方向で別の母音
         FlickKey(
-            label = def.label,
-            base = def.base!!,
-            modifier = keyModifier,
-            onKeyInput = onKeyInput
+            label            = def.label,
+            base             = def.base!!,
+            modifier         = keyModifier,
+            flickSensitivity = flickSensitivity,
+            longPressMs      = longPressMs,
+            onKeyInput       = onKeyInput
         )
     }
 }
@@ -328,17 +402,23 @@ private fun FlickKey(
     label: String,
     base: String,
     modifier: Modifier,
+    flickSensitivity: Int,   // 0(鈍感) ～ 100(敏感)
+    longPressMs: Long,       // 長押し判定ミリ秒（設定値をそのまま使用）
     onKeyInput: (KeyInput) -> Unit
 ) {
+    val c = LocalKeyboardColors.current
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val thresholdPx = with(density) { 12.dp.toPx() }
-    val longPressMillis = 250L
+
+    // 感度 50 → 12dp（旧ハードコード値と一致）、0 → 20dp、100 → 4dp
+    val thresholdDp = 4f + (100 - flickSensitivity) * 0.16f
+    val thresholdPx = with(density) { thresholdDp.dp.toPx() }
 
     var showPopup by remember { mutableStateOf(false) }
     var currentDirection by remember { mutableStateOf(FlickDirection.CENTER) }
 
     Box(
-        modifier = modifier.pointerInput(base) {
+        // flickSensitivity / longPressMs が変わったら pointerInput を再起動して反映
+        modifier = modifier.pointerInput(base, flickSensitivity, longPressMs) {
             awaitPointerEventScope {
                 while (true) {
                     val down = awaitFirstDown()
@@ -357,7 +437,7 @@ private fun FlickKey(
                             awaitPointerEvent()
                         } else {
                             val elapsed = System.currentTimeMillis() - downTime
-                            val remaining = (longPressMillis - elapsed).coerceAtLeast(1L)
+                            val remaining = (longPressMs - elapsed).coerceAtLeast(1L)
                             withTimeoutOrNull(remaining) { awaitPointerEvent() }
                         }
 
@@ -399,7 +479,7 @@ private fun FlickKey(
         },
         contentAlignment = Alignment.Center
     ) {
-        Text(text = label, color = TextPrimary, fontSize = 18.sp)
+        Text(text = label, color = c.textPrimary, fontSize = 18.sp)
 
         if (showPopup) {
             // 鍵の上部に浮かぶフリックポップアップ
@@ -415,9 +495,8 @@ private fun FlickKey(
 }
 
 /**
- * フリックポップアップ本体。
- * 中央 + 上下左右の5マスに、フリック先の文字を表示する。
- * 現在の方向（指の位置から推定）はアクセント色でハイライト。
+ * フリックポップアップは常に暗い背景で表示する（薄暗い環境でも視認しやすいため）。
+ * テーマには連動させず、ダーク固定とする。
  *
  *      [up]
  * [left][cent][right]
@@ -428,10 +507,10 @@ private fun FlickPopupContent(base: String, currentDirection: FlickDirection) {
     val options = KanaComposer.flickOptionsFor(base) ?: return
     if (options.size < 5) return
     val center = options[0]
-    val left = options[1]
-    val up = options[2]
-    val right = options[3]
-    val down = options[4]
+    val left   = options[1]
+    val up     = options[2]
+    val right  = options[3]
+    val down   = options[4]
 
     Box(
         modifier = Modifier
@@ -446,9 +525,9 @@ private fun FlickPopupContent(base: String, currentDirection: FlickDirection) {
                 PopupCell("", false)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                PopupCell(left, currentDirection == FlickDirection.LEFT)
+                PopupCell(left,   currentDirection == FlickDirection.LEFT)
                 PopupCell(center, currentDirection == FlickDirection.CENTER, isCenter = true)
-                PopupCell(right, currentDirection == FlickDirection.RIGHT)
+                PopupCell(right,  currentDirection == FlickDirection.RIGHT)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 PopupCell("", false)
@@ -461,10 +540,12 @@ private fun FlickPopupContent(base: String, currentDirection: FlickDirection) {
 
 @Composable
 private fun PopupCell(char: String, highlighted: Boolean, isCenter: Boolean = false) {
+    // ポップアップは常にダーク固定なので LightKeyboardColors.accent を直接参照
+    val accentColor = LightKeyboardColors.accent
     val bg = when {
-        highlighted -> Accent
-        isCenter -> Color(0x33FFFFFF)
-        else -> Color.Transparent
+        highlighted -> accentColor
+        isCenter    -> Color(0x33FFFFFF)
+        else        -> Color.Transparent
     }
     Box(
         modifier = Modifier
@@ -475,9 +556,9 @@ private fun PopupCell(char: String, highlighted: Boolean, isCenter: Boolean = fa
     ) {
         if (char.isNotEmpty()) {
             Text(
-                text = char,
-                color = Color.White,
-                fontSize = 15.sp,
+                text       = char,
+                color      = Color.White,
+                fontSize   = 15.sp,
                 fontWeight = if (highlighted) FontWeight.Medium else FontWeight.Normal
             )
         }
@@ -515,26 +596,23 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.awa
 //   - Row2: 9文字 + 両端 0.5 spacer    → 0.5 + 1×9 + 0.5 = 10
 //   - Row3: shift 1.5 + 7文字 + back 1.5 → 1.5 + 7 + 1.5 = 10
 //   - Row4: mode 1.5 + globe 1.5 + space 4 + comma 1 + enter 2 = 10
-//
-//   キー高さ 42dp (フリックの46dpより小さく、4行になっても全体高さ同等に)
-//   コントロールキーは BgKeyCtrl で文字キーと視覚的に区別
-//   Enter のみアクセント色 (AccentDark) で送信動作を示唆
 
 @Composable
 private fun QwertyGrid(
     shiftState: ShiftState,
     onKeyInput: (KeyInput) -> Unit
 ) {
+    val c = LocalKeyboardColors.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(BgKeyboard)
+            .background(c.bgKeyboard)
             .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         // Row 1: q w e r t y u i o p
         QwertyLetterRow(
-            letters = listOf("q","w","e","r","t","y","u","i","o","p"),
+            letters    = listOf("q","w","e","r","t","y","u","i","o","p"),
             shiftState = shiftState,
             onKeyInput = onKeyInput
         )
@@ -587,8 +665,8 @@ private fun QwertyGrid(
             }
             Box(modifier = Modifier.weight(2f)) {
                 QwertyControlKey(
-                    label = "改行",
-                    onClick = { onKeyInput(KeyInput.Enter) },
+                    label      = "改行",
+                    onClick    = { onKeyInput(KeyInput.Enter) },
                     accentColor = true
                 )
             }
@@ -620,6 +698,7 @@ private fun QwertyLetterKey(
     shiftState: ShiftState,
     onKeyInput: (KeyInput) -> Unit
 ) {
+    val c = LocalKeyboardColors.current
     // シフト ON 中は大文字表示＆生英字として直接コミット
     // シフト OFF 中は小文字表示＆ローマ字→かな変換
     val displayLetter = if (shiftState.isShifted) letter.uppercase() else letter
@@ -630,21 +709,18 @@ private fun QwertyLetterKey(
             .fillMaxWidth()
             .height(42.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(BgKey)
-            .border(0.5.dp, BorderSubtle, RoundedCornerShape(6.dp))
+            .background(c.bgKey)
+            .border(0.5.dp, c.borderSubtle, RoundedCornerShape(6.dp))
             .clickable {
-                if (shiftState.isShifted) {
-                    onKeyInput(KeyInput.AlphabetChar(ch))
-                } else {
-                    onKeyInput(KeyInput.RomajiChar(ch))
-                }
+                if (shiftState.isShifted) onKeyInput(KeyInput.AlphabetChar(ch))
+                else                      onKeyInput(KeyInput.RomajiChar(ch))
             },
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = displayLetter,
-            color = TextPrimary,
-            fontSize = 17.sp,
+            text       = displayLetter,
+            color      = c.textPrimary,
+            fontSize   = 17.sp,
             fontWeight = FontWeight.Normal
         )
     }
@@ -658,14 +734,15 @@ private fun QwertyLetterKey(
  */
 @Composable
 private fun ShiftKey(state: ShiftState, onClick: () -> Unit) {
+    val c = LocalKeyboardColors.current
     val bg = when (state) {
-        ShiftState.OFF -> BgKeyCtrl
-        ShiftState.SHIFT_ONCE -> BgKey
-        ShiftState.CAPS_LOCK -> AccentSoft
+        ShiftState.OFF        -> c.bgKeyCtrl
+        ShiftState.SHIFT_ONCE -> c.bgKey
+        ShiftState.CAPS_LOCK  -> c.accentSoft
     }
     val fg = when (state) {
-        ShiftState.OFF -> TextPrimary
-        else -> AccentDark
+        ShiftState.OFF -> c.textPrimary
+        else           -> c.accentDark
     }
     Box(
         modifier = Modifier
@@ -673,7 +750,7 @@ private fun ShiftKey(state: ShiftState, onClick: () -> Unit) {
             .height(42.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(bg)
-            .border(0.5.dp, BorderSubtle, RoundedCornerShape(6.dp))
+            .border(0.5.dp, c.borderSubtle, RoundedCornerShape(6.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -689,21 +766,22 @@ private fun QwertyControlKey(
     onClick: () -> Unit,
     accentColor: Boolean = false
 ) {
+    val c = LocalKeyboardColors.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(42.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(BgKeyCtrl)
-            .border(0.5.dp, BorderSubtle, RoundedCornerShape(6.dp))
+            .background(c.bgKeyCtrl)
+            .border(0.5.dp, c.borderSubtle, RoundedCornerShape(6.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         if (label.isNotEmpty()) {
             Text(
-                text = label,
-                color = if (accentColor) AccentDark else TextPrimary,
-                fontSize = 12.sp,
+                text       = label,
+                color      = if (accentColor) c.accentDark else c.textPrimary,
+                fontSize   = 12.sp,
                 fontWeight = FontWeight.Medium
             )
         }

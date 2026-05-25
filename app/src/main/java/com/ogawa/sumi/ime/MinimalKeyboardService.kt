@@ -1,6 +1,9 @@
 package com.ogawa.sumi.ime
 
+import android.content.Context
 import android.inputmethodservice.InputMethodService
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import androidx.compose.runtime.getValue
@@ -21,6 +24,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.ogawa.sumi.ai.AISuggestion
 import com.ogawa.sumi.ai.AISuggestionClient
 import com.ogawa.sumi.ai.SuggestionContext
+import com.ogawa.sumi.settings.KeyboardPreferences
 import com.ogawa.sumi.ui.KeyboardScreen
 import com.ogawa.sumi.ui.MinimalKeyboardTheme
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +66,7 @@ class MinimalKeyboardService : InputMethodService(),
     private val conversion by lazy { SimpleDictConversionEngine(applicationContext) }
     private val state = KeyboardStateHolder()
     private val aiClient by lazy { AISuggestionClient(applicationContext) }
+    private lateinit var kbPrefs: KeyboardPreferences
 
     /** 現在のモードに応じた composer を返す */
     private val activeComposer: InputComposer
@@ -77,6 +82,18 @@ class MinimalKeyboardService : InputMethodService(),
         super.onCreate()
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+
+        // 設定 DataStore を初期化し、変更をリアルタイムで state に反映
+        kbPrefs = KeyboardPreferences(applicationContext)
+        serviceScope.launch {
+            kbPrefs.snapshot.collect { snap ->
+                state.theme           = snap.theme
+                state.flickSensitivity = snap.flickSensitivity
+                state.longPressMs     = snap.longPressMs
+                state.haptic          = snap.haptic
+                state.aiEnabled       = snap.aiEnabled
+            }
+        }
     }
 
     override fun onCreateInputView(): View {
@@ -88,7 +105,7 @@ class MinimalKeyboardService : InputMethodService(),
             setViewTreeViewModelStoreOwner(this@MinimalKeyboardService)
             setViewTreeSavedStateRegistryOwner(this@MinimalKeyboardService)
             setContent {
-                MinimalKeyboardTheme {
+                MinimalKeyboardTheme(themeMode = state.theme) {
                     KeyboardScreen(
                         state = state,
                         onKeyInput = ::handleKeyInput,
@@ -129,6 +146,7 @@ class MinimalKeyboardService : InputMethodService(),
     // ====================================================================
 
     private fun handleKeyInput(input: KeyInput) {
+        performKeyFeedback()
         // シフトキー自体の処理は最優先で、状態リセット対象外
         if (input is KeyInput.Shift) {
             state.shiftState = state.shiftState.next()
@@ -264,10 +282,36 @@ class MinimalKeyboardService : InputMethodService(),
     }
 
     // ====================================================================
+    // キーフィードバック
+    // ====================================================================
+
+    /**
+     * キー押下時の触覚フィードバック。
+     * HAPTIC 設定が true のとき 20ms バイブレーション。
+     * Android 12+ では VibratorManager 推奨だが、VibrationEffect.createOneShot は
+     * API 26 以降利用可能（minSdk=26）なのでこの実装で問題ない。
+     */
+    @Suppress("DEPRECATION")
+    private fun performKeyFeedback() {
+        if (!state.haptic) return
+        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
+        if (vibrator.hasVibrator()) {
+            vibrator.vibrate(
+                VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE)
+            )
+        }
+    }
+
+    // ====================================================================
     // AI候補のトリガー（連打にデバウンス）
     // ====================================================================
 
     private fun scheduleAISuggestions(delayMillis: Long = 350) {
+        // AI機能が無効なら候補をクリアして即終了
+        if (!state.aiEnabled) {
+            state.aiSuggestions = emptyList()
+            return
+        }
         pendingSuggestionJob?.cancel()
         pendingSuggestionJob = serviceScope.launch {
             delay(delayMillis)
@@ -419,6 +463,7 @@ class KanaComposer : InputComposer {
 // ============================================================================
 
 class KeyboardStateHolder {
+    // --- 入力状態 ---
     var composingText by mutableStateOf("")
     var candidates by mutableStateOf<List<String>>(emptyList())
     var aiSuggestions by mutableStateOf<List<AISuggestion>>(emptyList())
@@ -426,11 +471,22 @@ class KeyboardStateHolder {
     var inputMode by mutableStateOf(InputMode.FLICK_KANA)
     var shiftState by mutableStateOf(ShiftState.OFF)
 
+    // --- 設定値（DataStore Flow から MinimalKeyboardService が購読して更新）---
+    // 注意: 初期レイアウト変更は次回 onStartInputView 起動時のみ有効。
+    //       サービス起動中の inputMode はリセットしない（UX 上問題なし）。
+    var theme by mutableStateOf("auto")
+    var flickSensitivity by mutableStateOf(50)   // 0(鈍感)〜100(敏感)
+    var longPressMs by mutableStateOf(250)        // 長押し判定ミリ秒
+    var haptic by mutableStateOf(true)            // バイブレーション on/off
+    var aiEnabled by mutableStateOf(true)         // AI候補バー表示 on/off
+
     fun reset() {
         composingText = ""
         candidates = emptyList()
         aiSuggestions = emptyList()
         aiLoading = false
         shiftState = ShiftState.OFF
+        // 設定値（theme / flickSensitivity / longPressMs / haptic / aiEnabled）は
+        // DataStore が管理するため reset() の対象外
     }
 }
