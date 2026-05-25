@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+.legacy/
+sumi-publish-kit/
