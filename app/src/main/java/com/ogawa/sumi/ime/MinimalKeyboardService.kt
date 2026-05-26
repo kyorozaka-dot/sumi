@@ -135,6 +135,18 @@ class MinimalKeyboardService : InputMethodService(),
                 super.onAttachedToWindow()
                 // super の後、子 View（ComposeView）の onAttachedToWindow が呼ばれる
             }
+            override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+                super.onLayout(changed, l, t, r, b)
+                // Android 10+ (Q): キーボード全域をシステムエッジジェスチャー除外ゾーンに指定。
+                // S25 / One UI 8.0 で「あA1」「⌨」（下端コーナー）へのタップが
+                // ジェスチャーナビ（戻る・ホーム）に横取りされる問題を修正。
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    @Suppress("NewApi")
+                    systemGestureExclusionRects = listOf(
+                        android.graphics.Rect(0, 0, r - l, b - t)
+                    )
+                }
+            }
         }
         wrapper.addView(
             composeView,
@@ -268,16 +280,14 @@ class MinimalKeyboardService : InputMethodService(),
                 state.inputMode = state.inputMode.next()
             }
             KeyInput.SwitchKeyboard -> {
-                // システムIMEピッカーを開く（API 28+ でのみ利用可能）
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    switchToNextInputMethod(false)
-                } else {
-                    // API 26-27 フォールバック: IMEピッカーダイアログを表示
-                    val imm = getSystemService(INPUT_METHOD_SERVICE)
-                            as? android.view.inputmethod.InputMethodManager
-                    @Suppress("DEPRECATION")
-                    imm?.showInputMethodPicker()
-                }
+                // IME 選択ピッカーを表示（全 API 共通）
+                // switchToNextInputMethod は API 34+ で deprecated かつ
+                // Android 16 (S25 / One UI 8.0) で無反応の報告があるため
+                // showInputMethodPicker() に統一
+                val imm = getSystemService(INPUT_METHOD_SERVICE)
+                        as? android.view.inputmethod.InputMethodManager
+                @Suppress("DEPRECATION")
+                imm?.showInputMethodPicker()
             }
             KeyInput.Shift -> { /* 上で処理済み、ここには来ない */ }
         }
@@ -430,13 +440,14 @@ enum class InputMode {
     NUMBER;           // 数字パッド (TODO: UI 未実装)
 
     /**
-     * モード循環。現状は実装済みの2モードのみを行き来する。
-     * QWERTY_ALPHABET / NUMBER の UI を追加したら全モード循環に変更すること。
+     * モード循環: あ（フリック12キー）→ A（QWERTYローマ字）→ 1（数字パッド）→ あ
+     * キーラベル「あA1」の3段階に対応。
      */
     fun next(): InputMode = when (this) {
-        FLICK_KANA -> QWERTY_ROMAJI
-        QWERTY_ROMAJI -> FLICK_KANA
-        else -> FLICK_KANA
+        FLICK_KANA    -> QWERTY_ROMAJI
+        QWERTY_ROMAJI -> NUMBER
+        NUMBER        -> FLICK_KANA
+        else          -> FLICK_KANA
     }
 }
 

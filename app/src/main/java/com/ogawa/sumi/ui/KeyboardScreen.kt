@@ -169,7 +169,7 @@ fun KeyboardScreen(
             candidates = state.candidates,
             onSelect   = onCandidateSelect
         )
-        // フリック ⇄ QWERTY をクロスフェードで切替（150ms ease）
+        // フリック / QWERTY / 数字 をクロスフェードで切替（150ms ease）
         Crossfade(
             targetState  = state.inputMode,
             animationSpec = tween(durationMillis = 150),
@@ -180,6 +180,7 @@ fun KeyboardScreen(
                     shiftState = state.shiftState,
                     onKeyInput = onKeyInput
                 )
+                InputMode.NUMBER -> NumberGrid(onKeyInput = onKeyInput)
                 else -> KeyGrid(
                     flickSensitivity = state.flickSensitivity,
                     longPressMs      = state.longPressMs.toLong(),
@@ -325,6 +326,34 @@ private val KEY_LAYOUT: List<List<KeyDef>> = listOf(
         KeyDef("⌨", isControl = true, controlAction = KeyInput.SwitchKeyboard))
 )
 
+/** 数字パッドレイアウト (InputMode.NUMBER 用) */
+private val NUMBER_KEY_LAYOUT: List<List<KeyDef>> = listOf(
+    listOf(
+        KeyDef("1", isControl = true, controlAction = KeyInput.AlphabetChar('1')),
+        KeyDef("2", isControl = true, controlAction = KeyInput.AlphabetChar('2')),
+        KeyDef("3", isControl = true, controlAction = KeyInput.AlphabetChar('3')),
+        KeyDef("⌫", isControl = true, controlAction = KeyInput.Backspace)
+    ),
+    listOf(
+        KeyDef("4", isControl = true, controlAction = KeyInput.AlphabetChar('4')),
+        KeyDef("5", isControl = true, controlAction = KeyInput.AlphabetChar('5')),
+        KeyDef("6", isControl = true, controlAction = KeyInput.AlphabetChar('6')),
+        KeyDef("空白", isControl = true, controlAction = KeyInput.Space)
+    ),
+    listOf(
+        KeyDef("7", isControl = true, controlAction = KeyInput.AlphabetChar('7')),
+        KeyDef("8", isControl = true, controlAction = KeyInput.AlphabetChar('8')),
+        KeyDef("9", isControl = true, controlAction = KeyInput.AlphabetChar('9')),
+        KeyDef("改行", isControl = true, controlAction = KeyInput.Enter)
+    ),
+    listOf(
+        KeyDef("あA1", isControl = true, controlAction = KeyInput.SwitchMode),
+        KeyDef("0", isControl = true, controlAction = KeyInput.AlphabetChar('0')),
+        KeyDef("ー", isControl = true, controlAction = KeyInput.AlphabetChar('ー')),
+        KeyDef("⌨", isControl = true, controlAction = KeyInput.SwitchKeyboard)
+    )
+)
+
 @Composable
 private fun KeyGrid(
     flickSensitivity: Int,
@@ -350,6 +379,37 @@ private fun KeyGrid(
                             def              = def,
                             flickSensitivity = flickSensitivity,
                             longPressMs      = longPressMs,
+                            onKeyInput       = onKeyInput
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 数字パッドグリッド（InputMode.NUMBER 時に表示） */
+@Composable
+private fun NumberGrid(onKeyInput: (KeyInput) -> Unit) {
+    val c = LocalKeyboardColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(c.bgKeyboard)
+            .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        NUMBER_KEY_LAYOUT.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                row.forEach { def ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        Key(
+                            def              = def,
+                            flickSensitivity = 50,   // 数字パッドではフリック不使用
+                            longPressMs      = 250L,
                             onKeyInput       = onKeyInput
                         )
                     }
@@ -646,13 +706,13 @@ private fun QwertyGrid(
                 QwertyControlKey(label = "⌫", onClick = { onKeyInput(KeyInput.Backspace) })
             }
         }
-        // Row 4: あ + ⌨ + space + 、 + 改行
+        // Row 4: あA1 + ⌨ + space + 、 + 改行
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Box(modifier = Modifier.weight(1.5f)) {
-                QwertyControlKey(label = "あ", onClick = { onKeyInput(KeyInput.SwitchMode) })
+                QwertyControlKey(label = "あA1", onClick = { onKeyInput(KeyInput.SwitchMode) })
             }
             Box(modifier = Modifier.weight(1.5f)) {
                 QwertyControlKey(label = "⌨", onClick = { onKeyInput(KeyInput.SwitchKeyboard) })
